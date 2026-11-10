@@ -129,9 +129,10 @@ const METRICS = [
 ];
 const FYS = { fy2024:"FY 2024–25", fy2025:"FY 2025–26", fy2026:"FY 2026–27" };
 
+let serverHistory = {};
 let history = {};   // { "2026-11-06": { date, fy2024:{...}, fy2025:{...}, fy2026:{...} } }
 let curFY = "fy2025", charts = {};
-const BACKEND_URL = "https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbxp7Mz2sGzoD222LabDfmJchx6tuxFqJ4eVrAzo0Do8cxYxJSWCIgxkJIAosCzi2cbVvg/exec";
+const BACKEND_URL = "https://script.google.com/macros/s/AKfycbxp7Mz2sGzoD222LabDfmJchx6tuxFqJ4eVrAzo0Do8cxYxJSWCIgxkJIAosCzi2cbVvg/exec";
 
 /* ---- Seed: today's uploaded file data (06.11.2026) ---- */
 history["2026-11-06"] = {"date":"2026-11-06","fy2024":{"Gulberg":{"laying":[135,134.316,134.316,.684],"commissioning":[135,134.24,134.24,.684],"disconnection":[135,134.24,134.24,.684],"service":[20549,20478,20478,71]},"Walled City":{"laying":[63.13,63.13,63.13,0],"commissioning":[63.13,63.13,63.13,0],"disconnection":[63.13,60.593,60.593,2.537],"service":[10123,10078,10078,45]},"Harbancepura":{"laying":[42.727,42.594,42.594,.133],"commissioning":[42.727,42.055,42.055,.672],"disconnection":[42.727,40.933,40.933,1.794],"service":[7780,7537,7537,243]},"Total":{"laying":[240.857,240.04,240.04,.817],"commissioning":[240.857,239.425,239.425,1.356],"disconnection":[240.857,235.766,235.766,5.015],"service":[38452,38093,38093,359]}},
@@ -187,7 +188,7 @@ async function loadHistory(){
   if(bu){
     try{
       const d = await jsonp(bu + "?action=get&_=" + Date.now());
-      if(d && d.history) Object.assign(history, d.history);
+      if(d && typeof d==="object"){ const h = d.history || ((d.ok===undefined) ? d : {}); Object.assign(history, h); serverHistory = h; }
       const n = Object.keys(history).length;
       document.getElementById("hdrMode").textContent = "Live · Server · " + n + " day(s)";
       const ss = document.getElementById("srvStatus"); if(ss) ss.textContent = "connected ✔ (" + n + " day(s) stored)";
@@ -208,7 +209,7 @@ async function pushToServer(snap){
     headers:{"Content-Type":"text/plain"}, body: JSON.stringify(snap)});
   await new Promise(r=>setTimeout(r,2500));          // give the sheet time to write
   await loadHistory();                                // re-read from server
-  if(history[snap.date]) return true;                 // confirmed on server
+  if(serverHistory && serverHistory[snap.date]) return true;   // confirmed on server
   throw new Error("Server did not confirm the save. Check the Apps Script deployment: Who has access = Anyone.");
 }
 
