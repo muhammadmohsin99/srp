@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Rehabilitation Plan (SRP) — Management Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0b1220; --panel:#111a2e; --panel2:#16213b; --line:#24314f;
+  --txt:#e8eefc; --mut:#8ea0c4; --acc:#2f7cf6; --good:#22c07a; --warn:#f5a623; --bad:#ef5350;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.wrap{max-width:1400px;margin:0 auto;padding:20px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:14px;justify-content:space-between;
+  background:linear-gradient(135deg,#12254d,#0e3a5f);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:18px}
+header h1{font-size:1.35rem;letter-spacing:.3px}
+header .sub{color:#b9c8e8;font-size:.85rem;margin-top:4px}
+.badge{background:var(--acc);padding:5px 14px;border-radius:20px;font-size:.8rem;font-weight:600}
+.badge.date{background:#0f2c52;border:1px solid #2b5a94;color:#a9d0ff}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+select,input[type=date]{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:.85rem}
+button{background:var(--acc);border:none;color:#fff;border-radius:8px;padding:9px 18px;font-size:.85rem;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--mut)}
+button:hover{filter:brightness(1.15)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.tab{background:var(--panel);border:1px solid var(--line);color:var(--mut);padding:9px 20px;border-radius:10px;cursor:pointer;font-weight:600;font-size:.85rem}
+.tab.active{background:var(--acc);color:#fff;border-color:var(--acc)}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.kpi .lbl{color:var(--mut);font-size:.78rem;text-transform:uppercase;letter-spacing:.6px}
+.kpi .big{font-size:1.9rem;font-weight:700;margin:6px 0 2px}
+.kpi .big small{font-size:.9rem;color:var(--mut);font-weight:500}
+.kpi .pend{font-size:.78rem;color:var(--warn)}
+.bar{height:8px;background:#1d2946;border-radius:6px;margin-top:10px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#2f7cf6,#38c6f4)}
+.pct{font-size:.78rem;color:var(--good);margin-top:5px;font-weight:600}
+.two{grid-template-columns:1.4fr 1fr}
+table{width:100%;border-collapse:collapse;font-size:.84rem}
+th{color:var(--mut);text-transform:uppercase;font-size:.72rem;letter-spacing:.5px;text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+td{padding:9px 10px;border-bottom:1px solid #1b2740}
+tr.total td{font-weight:700;color:#9fd0ff;border-top:2px solid #2b5a94}
+.mini{width:110px}.mini .bar{height:6px;margin-top:4px}
+h3.sec{font-size:.95rem;margin-bottom:12px;color:#cfe0ff}
+canvas{max-height:320px}
+footer{color:var(--mut);font-size:.75rem;text-align:center;margin:24px 0 8px}
+.admin{display:none;border:1px dashed #f5a623;background:#1a1608;border-radius:12px;padding:18px;margin-top:22px}
+.admin h3{color:var(--warn)}
+.admin input[type=file]{margin:10px 0;display:block;color:var(--mut)}
+#admMsg{font-size:.85rem;margin-top:8px;white-space:pre-wrap}
+.toast{position:fixed;bottom:20px;right:20px;background:#123c26;border:1px solid var(--good);padding:12px 18px;border-radius:10px;display:none;font-size:.85rem}
+@media(max-width:900px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>⚡ System Rehabilitation Plan (SRP)</h1>
+    <div class="sub">Region-wise physical progress monitoring — Laying · Commissioning · Disconnection · Service Line Shifting</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="badge date" id="hdrDate">As on: —</span>
+    <span class="badge" id="hdrMode">Live</span>
+  </div>
+</header>
+
+<div class="controls">
+  <label style="color:var(--mut);font-size:.8rem">View mode:</label>
+  <select id="viewMode">
+    <option value="ason">As on (snapshot)</option>
+    <option value="range">Progress from-to date</option>
+  </select>
+  <span id="asonWrap">
+    <label style="color:var(--mut);font-size:.8rem">Date:</label>
+    <select id="asonDate"></select>
+  </span>
+  <span id="rangeWrap" style="display:none">
+    <label style="color:var(--mut);font-size:.8rem">From:</label><input type="date" id="fromDate">
+    <label style="color:var(--mut);font-size:.8rem">To:</label><input type="date" id="toDate">
+  </span>
+  <span style="flex:1"></span>
+  <button class="ghost" onclick="window.print()">🖨 Print / PDF</button>
+</div>
+
+<div class="tabs" id="fyTabs"></div>
+
+<div class="grid kpis" id="kpiGrid"></div>
+
+<div class="grid two" style="margin-top:14px">
+  <div class="card"><h3 class="sec">Region-wise Progress — <span id="chartTitle"></span></h3><canvas id="regionChart"></canvas></div>
+  <div class="card"><h3 class="sec">Daily Trend (Cumulative Actual)</h3><canvas id="trendChart"></canvas></div>
+</div>
+
+<div class="card" style="margin-top:14px">
+  <h3 class="sec" id="tblTitle">Region-wise Detail</h3>
+  <div style="overflow-x:auto"><table id="detailTbl"></table></div>
+</div>
+
+<!-- ADMIN PANEL (open with ?admin=1) -->
+<div class="admin" id="adminPanel">
+  <h3>🔐 Admin — Daily Excel Upload</h3>
+  <div style="font-size:.82rem;color:#d8c48a;margin:6px 0">Upload "System Rehab.xlsx" daily. It is parsed, stored date-wise on the server, and the management dashboard updates automatically.</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <input type="file" id="fileIn" accept=".xlsx,.xls">
+    <button onclick="parseAndPreview()">1 · Parse & Preview</button>
+    <button onclick="uploadToServer()" style="background:var(--good)">2 · Save to Server</button>
+  </div>
+  <div style="margin-top:10px;font-size:.82rem;color:var(--mut)">Server: <span id="srvStatus" style="color:#7ee2a8;font-weight:600">connecting…</span></div>
+  <div style="margin-top:4px;font-size:.72rem;color:var(--mut);word-break:break-all">Backend in use: <span id="backendShown" style="color:#8ea0c4"></span></div>
+  <div id="admMsg"></div>
+</div>
+
+<footer>SRP Management Dashboard · Data auto-refreshes on load · No sign-in required</footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= DATA LAYER ================= */
+const REGIONS = ["Gulberg","Walled City","Harbancepura","Total"];
+const METRICS = [
+  {key:"laying",        label:"Laying (KM)",              unit:" KM"},
+  {key:"commissioning", label:"Commissioning (KM)",       unit:" KM"},
+  {key:"disconnection", label:"Disconnection (KM)",       unit:" KM"},
+  {key:"service",       label:"Service Lines Shifted",    unit:""}
+];
+const FYS = { fy2024:"FY 2024–25", fy2025:"FY 2025–26", fy2026:"FY 2026–27" };
+
+let history = {};   // { "2026-11-06": { date, fy2024:{...}, fy2025:{...}, fy2026:{...} } }
+let curFY = "fy2025", charts = {};
+const BACKEND_URL = "https://script.google.com/macros/s/https://script.google.com/macros/s/AKfycbxp7Mz2sGzoD222LabDfmJchx6tuxFqJ4eVrAzo0Do8cxYxJSWCIgxkJIAosCzi2cbVvg/exec";
+
+/* ---- Seed: today's uploaded file data (06.11.2026) ---- */
+history["2026-11-06"] = {"date":"2026-11-06","fy2024":{"Gulberg":{"laying":[135,134.316,134.316,.684],"commissioning":[135,134.24,134.24,.684],"disconnection":[135,134.24,134.24,.684],"service":[20549,20478,20478,71]},"Walled City":{"laying":[63.13,63.13,63.13,0],"commissioning":[63.13,63.13,63.13,0],"disconnection":[63.13,60.593,60.593,2.537],"service":[10123,10078,10078,45]},"Harbancepura":{"laying":[42.727,42.594,42.594,.133],"commissioning":[42.727,42.055,42.055,.672],"disconnection":[42.727,40.933,40.933,1.794],"service":[7780,7537,7537,243]},"Total":{"laying":[240.857,240.04,240.04,.817],"commissioning":[240.857,239.425,239.425,1.356],"disconnection":[240.857,235.766,235.766,5.015],"service":[38452,38093,38093,359]}},
+"fy2025":{"Gulberg":{"laying":[75.271,74.407,68.2,.864],"commissioning":[75.271,39.821,35.43,35.45],"disconnection":[75.271,18.686,10.41,56.585],"service":[9155,6310,5077,2845]},"Walled City":{"laying":[77.337,74.26,83.79,3.077],"commissioning":[77.337,47.35,46.34,29.987],"disconnection":[77.337,38.59,28.86,38.747],"service":[10210,8362,3054,1848]},"Harbancepura":{"laying":[54.979,54.979,54.94,0],"commissioning":[54.979,43.672,39.23,11.307],"disconnection":[54.979,23.989,0,30.99],"service":[8875,6738,4980,2137]},"Total":{"laying":[207.587,203.646,206.93,3.941],"commissioning":[207.587,130.843,121,76.744],"disconnection":[207.587,81.265,39.27,126.322],"service":[28240,21410,13111,6830]}},
+"fy2026":{"Gulberg":{"laying":[156,18.168,16.89,137.832],"commissioning":[156,2.503,0,153.497],"disconnection":[156,0,0,156],"service":[20158,237,0,19921]},"Walled City":{"laying":[67,3.23,0,63.77],"commissioning":[0,0,0,0],"disconnection":[0,0,0,0],"service":[0,0,0,0]},"Harbancepura":{"laying":[78.663,27.613,26.51,51.05],"commissioning":[78.663,.92,0,77.743],"disconnection":[78.663,0,0,78.663],"service":[10401,62,0,10401]},"Total":{"laying":[301.663,49.011,43.4,252.652],"commissioning":[234.663,3.423,0,231.24],"disconnection":[234.663,0,0,234.663],"service":[30559,299,0,30322]}}};
+
+/* ---- Excel parser: matches the fixed SRP layout ---- */
+function parseSRP(workbook){
+  const ws = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  // find report date
+  let dateStr = null;
+  for(const r of rows){ if(r.some(c=>String(c).trim()==="Dated:")){ const v=r.find((c,i)=>r[i-1]==="Dated:")||r[r.findIndex(c=>String(c).trim()==="Dated:")+1]; if(v) dateStr=String(v).trim(); } }
+  const dt = parseReportDate(dateStr);
+  const out = {date: dt, fy2024:{}, fy2025:{}, fy2026:{}};
+  let fy = null;
+  for(let i=0;i<rows.length;i++){
+    const a = String(rows[i][0]||"").trim();
+    const mFy = a.match(/^SRP FY (\d{4})-(\d{2})/);
+    if(mFy){ fy = "fy"+mFy[1]; continue; }
+    if(fy && REGIONS.includes(a)){
+      const vals = rows[i].slice(1,17).map(v=> (v===null||String(v).trim()===""||/^nill$/i.test(String(v)))?0:parseFloat(v)||0);
+      const o = {};
+      METRICS.forEach((mt,mi)=> o[mt.key] = vals.slice(mi*4, mi*4+4));
+      out[fy][a] = o;
+      if(a==="Total") fy = null;   // block ends after Total
+    }
+  }
+  return out;
+}
+function parseReportDate(s){
+  if(!s) return new Date().toISOString().slice(0,10);
+  const m = s.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : new Date().toISOString().slice(0,10);
+}
+
+/* ---- Backend (Google Apps Script) ---- */
+function backendUrl(){ return BACKEND_URL; }
+function jsonp(url){
+  return new Promise((res,rej)=>{
+    const cb = "cb"+Math.random().toString(36).slice(2);
+    const s = document.createElement("script");
+    window[cb] = d=>{res(d); delete window[cb]; s.remove();};
+    s.src = url + (url.includes("?")?"&":"?") + "callback="+cb;
+    s.onerror = rej; document.body.appendChild(s);
+    setTimeout(()=>rej(new Error("timeout")), 9000);
+  });
+}
+async function loadHistory(){
+  const bu = backendUrl();
+  const local = JSON.parse(localStorage.getItem("srp_history")||"{}");
+  Object.assign(history, local);
+  if(bu){
+    try{
+      const d = await jsonp(bu + "?action=get&_=" + Date.now());
+      if(d && d.history) Object.assign(history, d.history);
+      const n = Object.keys(history).length;
+      document.getElementById("hdrMode").textContent = "Live · Server · " + n + " day(s)";
+      const ss = document.getElementById("srvStatus"); if(ss) ss.textContent = "connected ✔ (" + n + " day(s) stored)";
+    }catch(e){
+      document.getElementById("hdrMode").textContent = "Local (server offline)";
+      const ss = document.getElementById("srvStatus");
+      if(ss){ ss.textContent = "❌ UNREACHABLE — see test below"; ss.style.color = "#f08080"; }
+    }
+  }
+}
+async function pushToServer(snap){
+  const bu = backendUrl(); if(!bu) throw new Error("Set the Backend URL first (Admin panel).");
+  // local always kept as cache
+  history[snap.date] = snap;
+  localStorage.setItem("srp_history", JSON.stringify(history));
+  // POST with simple request (no preflight) — Apps Script accepts cross-origin POST
+  await fetch(bu + "?action=save", {method:"POST", mode:"no-cors",
+    headers:{"Content-Type":"text/plain"}, body: JSON.stringify(snap)});
+  await new Promise(r=>setTimeout(r,2500));          // give the sheet time to write
+  await loadHistory();                                // re-read from server
+  if(history[snap.date]) return true;                 // confirmed on server
+  throw new Error("Server did not confirm the save. Check the Apps Script deployment: Who has access = Anyone.");
+}
+
+/* ================= ADMIN ACTIONS ================= */
+let pending = null;
+function adm(m){ document.getElementById("admMsg").textContent = m; }
+function parseAndPreview(){
+  const f = document.getElementById("fileIn").files[0]; if(!f) return adm("Choose a file first.");
+  const rd = new FileReader();
+  rd.onload = e=>{
+    try{
+      pending = parseSRP(XLSX.read(e.target.result,{type:"array"}));
+      let ok = ["fy2024","fy2025","fy2026"].every(fy=>pending[fy]&&pending[fy].Total);
+      adm(ok ? `✅ Parsed OK — Report date: ${pending.date}\nTotal Laying FY25-26: ${pending.fy2025.Total.laying[1]} / ${pending.fy2025.Total.laying[0]} KM` : "⚠ Parsed but some blocks/regions missing. Check file layout.");
+      if(ok) renderAll();
+    }catch(err){ adm("❌ Parse error: "+err.message); }
+  };
+  rd.readAsArrayBuffer(f);
+}
+async function uploadToServer(){
+  if(!pending) return adm("Parse a file first.");
+  adm("Saving to server…");
+  try{ await pushToServer(pending); adm(`✅ Saved for ${pending.date}. Management dashboard now shows this date.`); refreshDates(); renderAll(); }
+  catch(e){ adm("❌ "+e.message); }
+}
+function saveBackend(){ localStorage.setItem("srp_backend", document.getElementById("backendUrl").value.trim()); adm("Backend URL saved."); loadHistory().then(()=>{refreshDates();renderAll();}); }
+
+/* ================= RENDERING ================= */
+const dstr = iso => { const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}); };
+function snapshotFor(dateISO){
+  const ds = Object.keys(history).sort();
+  if(history[dateISO]) return history[dateISO];
+  const prior = ds.filter(d=>d<=dateISO).pop();
+  return prior ? history[prior] : null;
+}
+function getViewData(){
+  const mode = document.getElementById("viewMode").value;
+  const ason = document.getElementById("asonDate").value;
+  if(mode==="ason") return {snap: snapshotFor(ason), label:"As on "+dstr(snapshotFor(ason).date), delta:false};
+  const f = document.getElementById("fromDate").value, t = document.getElementById("toDate").value;
+  const s1 = snapshotFor(f), s2 = snapshotFor(t);
+  if(!s1||!s2) return {snap:null};
+  // progress in period = difference of Actuals
+  const diff = JSON.parse(JSON.stringify(s2));
+  for(const fy of Object.keys(FYS)) for(const reg of Object.keys(s2[fy]||{})) for(const mt of METRICS){
+    const a2=s2[fy][reg][mt.key], a1=(s1[fy]&&s1[fy][reg]&&s1[fy][reg][mt.key])||[0,0,0,0];
+    diff[fy][reg][mt.key] = [a2[0], a2[1]-a1[1], a2[2]-a1[2], a2[3]];
+  }
+  return {snap:diff, label:`Progress ${dstr(s1.date)} → ${dstr(s2.date)}`, delta:true};
+}
+function fmt(n,dec=1){ return Number(n).toLocaleString("en-US",{maximumFractionDigits:dec}); }
+
+function renderAll(){
+  const v = getViewData();
+  if(!v.snap) return;
+  document.getElementById("hdrDate").textContent = "Report: " + dstr(v.snap.date);
+  // FY tabs
+  const tabs = document.getElementById("fyTabs");
+  tabs.innerHTML = Object.entries(FYS).map(([k,l])=>
+    `<div class="tab ${k===curFY?'active':''}" onclick="curFY='${k}';renderAll()">${l}</div>`).join("");
+  const fy = v.snap[curFY], T = fy.Total;
+  // KPI cards
+  document.getElementById("kpiGrid").innerHTML = METRICS.map(mt=>{
+    const [tg,ac,pd] = T[mt.key];
+    const pct = tg>0? Math.min(100, ac/tg*100):0;
+    return `<div class="card kpi"><div class="lbl">${mt.label}</div>
+      <div class="big">${fmt(ac, mt.key==="service"?0:2)}<small> / ${fmt(tg, mt.key==="service"?0:2)}${mt.unit}</small></div>
+      <div class="pend">Pending: ${fmt(pd, mt.key==="service"?0:2)}${mt.unit}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div><div class="pct">${pct.toFixed(1)}% achieved</div></div>`;
+  }).join("");
+  document.getElementById("chartTitle").textContent = FYS[curFY];
+  document.getElementById("tblTitle").textContent = "Region-wise Detail — " + FYS[curFY] + " — " + v.label;
+  renderRegionChart(fy); renderTable(fy); renderTrend(curFY);
+}
+function renderRegionChart(fy){
+  const regs = REGIONS.slice(0,3);
+  const mk = mt=> METRICS.map(m=>({
+    label:m.label.split(" (")[0], data:regs.map(r=>fy[r][m.key][mt]),
+    backgroundColor:["#2f7cf6","#22c07a","#f5a623","#ab6ff2"][METRICS.indexOf(m)], borderRadius:5
+  }));
+  const h = (document.getElementById("viewMode").value==="ason");
+  charts.region?.destroy();
+  charts.region = new Chart(document.getElementById("regionChart"), {type:"bar",
+    data:{labels:regs, datasets: h? mk(1) : mk(1)},
+    options:{responsive:true, plugins:{legend:{labels:{color:"#c9d6f2"}}},
+      scales:{x:{ticks:{color:"#8ea0c4"},grid:{display:false}}, y:{ticks:{color:"#8ea0c4"},grid:{color:"#1b2740"}}}}});
+}
+function renderTable(fy){
+  let html = `<thead><tr><th>Region</th>${METRICS.map(m=>`<th colspan=2>${m.label}</th>`).join("")}</tr>
+  <tr><th></th>${METRICS.map(()=>`<th>Actual</th><th style="width:140px">Progress</th>`).join("")}</tr></thead><tbody>`;
+  for(const reg of REGIONS){
+    html += `<tr class="${reg==="Total"?"total":""}"><td>${reg}</td>`;
+    for(const m of METRICS){
+      const [tg,ac] = fy[reg][m.key]; const pct = tg>0?ac/tg*100:0;
+      html += `<td>${fmt(ac, m.key==="service"?0:2)}<span style="color:var(--mut)"> / ${fmt(tg, m.key==="service"?0:2)}</span></td>
+      <td><div class="mini"><div style="font-size:.75rem">${pct.toFixed(1)}%</div><div class="bar"><i style="width:${Math.min(100,pct)}%"></i></div></div></td>`;
+    }
+    html += "</tr>";
+  }
+  document.getElementById("detailTbl").innerHTML = html + "</tbody>";
+}
+function renderTrend(fyKey){
+  const ds = Object.keys(history).sort();
+  const labels = ds.map(dstr);
+  charts.trend?.destroy();
+  charts.trend = new Chart(document.getElementById("trendChart"), {type:"line",
+    data:{labels, datasets: METRICS.filter(m=>m.key!=="service").map((m,i)=>({
+      label:m.label, data:ds.map(d=>history[d][fyKey]?.Total?.[m.key]?.[1]??null),
+      borderColor:["#2f7cf6","#22c07a","#f5a623"][i], backgroundColor:"transparent", tension:.3, spanGaps:true, pointRadius:3 }))},
+    options:{responsive:true, plugins:{legend:{labels:{color:"#c9d6f2"}}},
+      scales:{x:{ticks:{color:"#8ea0c4"}}, y:{ticks:{color:"#8ea0c4"},grid:{color:"#1b2740"}}}}});
+}
+/* ---- date controls ---- */
+function refreshDates(){
+  const ds = Object.keys(history).sort();
+  const sel = document.getElementById("asonDate");
+  sel.innerHTML = ds.map(d=>`<option value="${d}">${dstr(d)}</option>`).join("");
+  sel.value = ds[ds.length-1];
+  if(ds.length){ document.getElementById("fromDate").value = ds[0]; document.getElementById("toDate").value = ds[ds.length-1]; }
+}
+document.getElementById("viewMode").onchange = e=>{
+  document.getElementById("asonWrap").style.display = e.target.value==="ason"?"":"none";
+  document.getElementById("rangeWrap").style.display = e.target.value==="ason"?"none":"";
+  renderAll();
+};
+document.getElementById("asonDate").onchange = renderAll;
+document.getElementById("fromDate").onchange = renderAll;
+document.getElementById("toDate").onchange = renderAll;
+
+/* ---- init ---- */
+(async ()=>{
+  if(location.search.includes("admin=1")){
+    document.getElementById("adminPanel").style.display="block";
+  }
+  const bs = document.getElementById("backendShown"); if(bs) bs.textContent = BACKEND_URL;
+  await loadHistory();
+  refreshDates(); renderAll();
+})();
+</script>
+</body>
+</html>
