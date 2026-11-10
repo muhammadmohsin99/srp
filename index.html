@@ -52,6 +52,29 @@ footer{color:var(--mut);font-size:.75rem;text-align:center;margin:24px 0 8px}
 .admin input[type=file]{margin:10px 0;display:block;color:var(--mut)}
 #admMsg{font-size:.85rem;margin-top:8px;white-space:pre-wrap}
 .toast{position:fixed;bottom:20px;right:20px;background:#123c26;border:1px solid var(--good);padding:12px 18px;border-radius:10px;display:none;font-size:.85rem}
+
+.tcap{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.76rem;color:var(--mut);margin:-4px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.tcap b{color:#cfe0ff}.tcap .cp b{color:var(--good)}
+.dtgrid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(540px,1fr))}
+.dt{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dth{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-left:4px solid var(--acc);background:#13203a;font-weight:700;font-size:.9rem;color:#e4edff}
+.dth em{font-style:normal;font-weight:500;font-size:.72rem;color:var(--mut)}
+table.reg{font-variant-numeric:tabular-nums}
+table.reg th{background:#101a31;white-space:nowrap}
+table.reg th.n,table.reg td.n{text-align:right}
+table.reg td.rg{font-weight:600;color:#dbe6ff}
+table.reg td.posted{color:var(--good);font-weight:700;background:rgba(34,192,122,.07)}
+table.reg td.pendc{color:var(--warn)}
+table.reg tbody tr:hover td{background:#1a2848}
+table.reg tr.total td{background:#122a4a;border-top:2px solid #2b5a94}
+table.reg tr.total td.posted{background:rgba(34,192,122,.14)}
+table.reg td.pc{width:130px;min-width:110px}
+table.reg .pv{font-size:.75rem;margin-bottom:3px}
+table.reg .bar{height:6px;margin-top:0}
+table.reg .bar.ok>i{background:linear-gradient(90deg,#22c07a,#5be3a4)}
+table.reg .bar.low>i{background:linear-gradient(90deg,#f5a623,#f7c46a)}
+@media(max-width:620px){.dtgrid{grid-template-columns:1fr}}
+@media print{.dtgrid{grid-template-columns:1fr 1fr}.dt{break-inside:avoid}}
 @media(max-width:900px){.two{grid-template-columns:1fr}}
 </style>
 </head>
@@ -97,7 +120,8 @@ footer{color:var(--mut);font-size:.75rem;text-align:center;margin:24px 0 8px}
 
 <div class="card" style="margin-top:14px">
   <h3 class="sec" id="tblTitle">Region-wise Detail</h3>
-  <div style="overflow-x:auto"><table id="detailTbl"></table></div>
+  <div class="tcap"><span><b>Target</b> – plan for the year</span><span><b>Actual</b> – achieved to date</span><span class="cp"><b>Posted</b> – posted quantity</span><span><b>Pending</b> – balance against target</span><span>Actual % and Posted % are calculated against Target</span></div>
+  <div id="detailTbl" class="dtgrid"></div>
 </div>
 
 <!-- ADMIN PANEL (open with ?admin=1) -->
@@ -298,18 +322,31 @@ function renderRegionChart(fy){
       scales:{x:{ticks:{color:"#8ea0c4"},grid:{display:false}}, y:{ticks:{color:"#8ea0c4"},grid:{color:"#1b2740"}}}}});
 }
 function renderTable(fy){
-  let html = `<thead><tr><th>Region</th>${METRICS.map(m=>`<th colspan=2>${m.label}</th>`).join("")}</tr>
-  <tr><th></th>${METRICS.map(()=>`<th>Actual</th><th style="width:140px">Progress</th>`).join("")}</tr></thead><tbody>`;
-  for(const reg of REGIONS){
-    html += `<tr class="${reg==="Total"?"total":""}"><td>${reg}</td>`;
-    for(const m of METRICS){
-      const [tg,ac] = fy[reg][m.key]; const pct = tg>0?ac/tg*100:0;
-      html += `<td>${fmt(ac, m.key==="service"?0:2)}<span style="color:var(--mut)"> / ${fmt(tg, m.key==="service"?0:2)}</span></td>
-      <td><div class="mini"><div style="font-size:.75rem">${pct.toFixed(1)}%</div><div class="bar"><i style="width:${Math.min(100,pct)}%"></i></div></div></td>`;
-    }
-    html += "</tr>";
-  }
-  document.getElementById("detailTbl").innerHTML = html + "</tbody>";
+  const colors = {laying:"#2f7cf6",commissioning:"#22c07a",disconnection:"#f5a623",service:"#ab6ff2"};
+  const barCls = p => p>=100 ? "ok" : (p>=50 ? "mid" : "low");
+  document.getElementById("detailTbl").innerHTML = METRICS.map(m=>{
+    const dec = m.key==="service" ? 0 : 2, unit = m.key==="service" ? "Nos." : "KM";
+    const rows = REGIONS.map(reg=>{
+      const [tg,ac,po,pe] = (fy[reg] && fy[reg][m.key]) || [0,0,0,0];
+      const aP = tg>0 ? ac/tg*100 : 0, pP = tg>0 ? po/tg*100 : 0;
+      return `<tr class="${reg==="Total"?"total":""}">
+        <td class="rg">${reg}</td>
+        <td class="n">${fmt(tg,dec)}</td>
+        <td class="n">${fmt(ac,dec)}</td>
+        <td class="n posted">${fmt(po,dec)}</td>
+        <td class="n pendc">${fmt(pe,dec)}</td>
+        <td class="n">${aP.toFixed(1)}%</td>
+        <td class="pc"><div class="pv">${pP.toFixed(1)}%</div><div class="bar ${barCls(pP)}"><i style="width:${Math.min(100,pP)}%"></i></div></td>
+      </tr>`;
+    }).join("");
+    return `<div class="dt">
+      <div class="dth" style="border-left-color:${colors[m.key]}"><span>${m.label}</span><em>Unit: ${unit}</em></div>
+      <div style="overflow-x:auto"><table class="reg">
+        <thead><tr><th>Region</th><th class="n">Target</th><th class="n">Actual</th><th class="n">Posted</th><th class="n">Pending</th><th class="n">Actual %</th><th>Posted %</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>`;
+  }).join("");
 }
 function renderTrend(fyKey){
   const ds = Object.keys(history).sort();
