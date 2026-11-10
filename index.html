@@ -277,7 +277,7 @@ function renderAll(){
     const pct = tg>0? Math.min(100, ac/tg*100):0;
     return `<div class="card kpi"><div class="lbl">${mt.label}</div>
       <div class="big">${fmt(ac, mt.key==="service"?0:2)}<small> / ${fmt(tg, mt.key==="service"?0:2)}${mt.unit}</small></div>
-      <div class="pend">Pending: ${fmt(pd, mt.key==="service"?0:2)}${mt.unit}</div>
+      <div class="pend">Posted: ${fmt(pd, mt.key==="service"?0:2)}${mt.unit}</div>
       <div class="bar"><i style="width:${pct}%"></i></div><div class="pct">${pct.toFixed(1)}% achieved</div></div>`;
   }).join("");
   document.getElementById("chartTitle").textContent = FYS[curFY];
