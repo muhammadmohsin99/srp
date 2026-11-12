@@ -136,6 +136,7 @@ table.reg .bar.low>i{background:linear-gradient(90deg,#f5a623,#f7c46a)}
     <input type="file" id="fileIn" accept=".xlsx,.xls">
     <button onclick="parseAndPreview()">1 · Parse & Preview</button>
     <button onclick="uploadToServer()" style="background:var(--good)">2 · Save to Server</button>
+    <button onclick="syncToServer()" class="ghost">3 · Sync to Server</button>
   </div>
   <div style="margin-top:10px;font-size:.82rem;color:var(--mut)">Server: <span id="srvStatus" style="color:#7ee2a8;font-weight:600">connecting…</span></div>
   <div style="margin-top:4px;font-size:.72rem;color:var(--mut);word-break:break-all">Backend in use: <span id="backendShown" style="color:#8ea0c4"></span></div>
@@ -213,19 +214,46 @@ async function loadHistory(){
   const bu = backendUrl();
   const local = JSON.parse(localStorage.getItem("srp_history")||"{}");
   Object.assign(history, local);
+  const badge = document.getElementById("hdrMode"), ss = document.getElementById("srvStatus");
+  const setBadge = (t,warn)=>{ badge.textContent = t; badge.style.background = warn ? "#b45309" : ""; };
   if(bu){
     try{
       const d = await jsonp(bu + "?action=get&_=" + Date.now());
       if(d && typeof d==="object"){ const h = d.history || ((d.ok===undefined) ? d : {}); Object.assign(history, h); serverHistory = h; }
-      const n = Object.keys(history).length;
-      document.getElementById("hdrMode").textContent = "Live · Server · " + n + " day(s)";
-      const ss = document.getElementById("srvStatus"); if(ss) ss.textContent = "connected ✔ (" + n + " day(s) stored)";
+      const sd = Object.keys(serverHistory).sort();
+      const only = Object.keys(local).filter(k=>!serverHistory[k]);
+      if(only.length){
+        setBadge("⚠ " + only.length + " day(s) only on this device, not on server", true);
+        if(ss){ ss.style.color="#f5c26b"; ss.textContent = "⚠ Server has " + sd.length + " day(s); NOT on server: " + only.sort().map(dstr).join(", ") + " — click “3 · Sync to Server”"; }
+      }else{
+        setBadge("Live · Server · " + sd.length + " day(s)", false);
+        if(ss){ ss.style.color="#7ee2a8"; ss.textContent = "connected ✔ — server holds " + sd.length + " day(s): " + (sd.map(dstr).join(", ")||"none yet"); }
+      }
     }catch(e){
-      document.getElementById("hdrMode").textContent = "Local (server offline)";
-      const ss = document.getElementById("srvStatus");
+      const all = Object.keys(history).sort(), last = all.length ? dstr(all[all.length-1]) : "—";
+      setBadge("⚠ Server unreachable — showing saved data up to " + last, true);
       if(ss){ ss.textContent = "❌ UNREACHABLE — see test below"; ss.style.color = "#f08080"; }
     }
   }
+}
+async function postSnap(snap){
+  await fetch(backendUrl() + "?action=save", {method:"POST", mode:"no-cors",
+    headers:{"Content-Type":"text/plain"}, body: JSON.stringify(snap)});
+}
+async function syncToServer(){
+  await loadHistory();
+  const local = JSON.parse(localStorage.getItem("srp_history")||"{}");
+  const miss = Object.keys(local).filter(k=>!serverHistory[k]).sort();
+  if(!miss.length) return adm("✅ Nothing to sync — the server already has every day stored on this device.");
+  adm("Sending " + miss.length + " day(s) to the server…");
+  try{
+    for(const k of miss){ await postSnap(local[k]); await new Promise(r=>setTimeout(r,2000)); }
+    await loadHistory();
+    const still = miss.filter(k=>!serverHistory[k]);
+    adm(still.length ? "❌ Server still missing: " + still.map(dstr).join(", ") + ". Check the Apps Script deployment (Who has access = Anyone, New version)."
+                     : "✅ Synced: " + miss.map(dstr).join(", ") + ". Management will now see these dates.");
+    refreshDates(); renderAll();
+  }catch(e){ adm("❌ " + e.message); }
 }
 async function pushToServer(snap){
   const bu = backendUrl(); if(!bu) throw new Error("Set the Backend URL first (Admin panel).");
